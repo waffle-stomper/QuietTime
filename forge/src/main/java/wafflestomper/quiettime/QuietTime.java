@@ -6,6 +6,12 @@ import java.util.Iterator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import com.google.common.base.Joiner;
+import com.google.common.base.Splitter;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiIngameMenu;
 import net.minecraft.client.gui.GuiScreen;
@@ -23,6 +29,7 @@ import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.Mod.EventHandler;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
+import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent.Phase;
 import net.minecraftforge.fml.common.gameevent.TickEvent.RenderTickEvent;
@@ -31,7 +38,7 @@ import net.minecraftforge.fml.common.gameevent.TickEvent.RenderTickEvent;
 public class QuietTime{
 	
     public static final String MODID = "QuietTime";
-    public static final String VERSION = "0.2.1";
+    public static final String VERSION = "0.2.8";
     public static final String NAME = "Quiet Time";
     
     
@@ -41,6 +48,9 @@ public class QuietTime{
     private long statusTicksLeft = 0;
     private KeyBindings keyBindings;
     boolean devEnv = false;
+    private static final Splitter NEWLINE_SPLITTER = Splitter.on('\n');
+    private static final Joiner NEWLINE_STRING_JOINER = Joiner.on("\\n");
+    private static final Logger LOGGER = LogManager.getLogger("qt");
     
     
     @EventHandler
@@ -104,9 +114,14 @@ public class QuietTime{
     private void injectChatLine(ITextComponent message){
     	Method targetMethod;
 		try {
-			targetMethod = this.mc.ingameGUI.getChatGUI().getClass().getDeclaredMethod("setChatLine", ITextComponent.class, Integer.TYPE, Integer.TYPE, boolean.class);
+			if (this.devEnv){
+				targetMethod = this.mc.ingameGUI.getChatGUI().getClass().getDeclaredMethod("setChatLine", ITextComponent.class, Integer.TYPE, Integer.TYPE, boolean.class);
+			}
+			else{
+				targetMethod = this.mc.ingameGUI.getChatGUI().getClass().getDeclaredMethod("func_146237_a", ITextComponent.class, Integer.TYPE, Integer.TYPE, boolean.class);
+			}
 			targetMethod.setAccessible(true);
-			targetMethod.invoke(this.mc.ingameGUI.getChatGUI(), message, 0, this.mc.ingameGUI.getUpdateCounter()-205, false);
+			targetMethod.invoke(this.mc.ingameGUI.getChatGUI(), message, 0, this.mc.ingameGUI.getUpdateCounter()-300, true);
 		} catch (NoSuchMethodException e1) {
 			e1.printStackTrace();
 		} catch (SecurityException e1) {
@@ -121,17 +136,18 @@ public class QuietTime{
     }
     
     
-    @SubscribeEvent
+    @SubscribeEvent(priority=EventPriority.HIGHEST)
     public void chatEvent(ClientChatReceivedEvent event){
-    	
     	// First, process any snitch co-ordinates
     	if (event.getType() == 1){
     		event.setMessage(snitchHoverConversion(event.getMessage()));
     	}
     	// Hide messages if chat is disabled
     	if (chatEventsDisabled){
+    		ITextComponent message = event.getMessage();
     		event.setCanceled(true);
-        	injectChatLine(event.getMessage());
+        	injectChatLine(message);
+        	LOGGER.info("[CHAT] {}", new Object[] {NEWLINE_STRING_JOINER.join(NEWLINE_SPLITTER.split(message.getUnformattedText()))});
     	}
     }
     

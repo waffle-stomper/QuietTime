@@ -1,0 +1,16 @@
+[
+{
+  "modid": "QuietTime",
+  "name": "Quiet Time",
+  "description": "Chat silencer",
+  "version": "${version}",
+  "mcversion": "${mcversion}",
+  "url": "",
+  "updateUrl": "",
+  "authorList": ["waffle_stomper"],
+  "credits": "Caffeine and alcohol",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}
+]

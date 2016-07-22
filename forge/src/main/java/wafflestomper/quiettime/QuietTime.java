@@ -2,6 +2,7 @@ package wafflestomper.quiettime;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -29,6 +30,7 @@ import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.Mod.EventHandler;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
+import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent.Phase;
@@ -38,20 +40,33 @@ import net.minecraftforge.fml.common.gameevent.TickEvent.RenderTickEvent;
 public class QuietTime{
 	
     public static final String MODID = "QuietTime";
-    public static final String VERSION = "0.2.8";
+    public static final String VERSION = "0.3.0";
     public static final String NAME = "Quiet Time";
     
+    class SnitchUser{
+    	public SnitchUser(String _username, long _time){
+    		this.username = _username;
+    		this.time = _time;
+    	}
+    	String username;
+    	long time;
+    }
     
-    private boolean chatEventsDisabled = false;
     private Minecraft mc = Minecraft.getMinecraft();
+    private boolean chatEventsDisabled = false;
+    private boolean snitchHoverConversion = true;
+    private boolean snitchRateLimiting = false;
+    private long snitchSecondsBetweenMessages = 10l;
     private String statusMessage = "";
     private long statusTicksLeft = 0;
     private KeyBindings keyBindings;
+    private ConfigManager config;
     boolean devEnv = false;
     private static final Splitter NEWLINE_SPLITTER = Splitter.on('\n');
     private static final Joiner NEWLINE_STRING_JOINER = Joiner.on("\\n");
-    private static final Logger LOGGER = LogManager.getLogger("qt");
-    
+    private static final Logger LOGGER = LogManager.getLogger(net.minecraft.client.Minecraft.class);
+    private static final Pattern snitchPattern = Pattern.compile("(?<preamble>^ \\* (?<username>[a-zA-Z0-9_]+?) (?:entered|logged (?:in to|out in)) snitch at )(?<snitchname>[a-zA-Z0-9_]+)? (?<snitchlocation>\\[[a-zA-Z0-9, \\-]+\\])");
+    private ArrayList<SnitchUser> snitchHistory = new ArrayList();
     
     @EventHandler
     public void init(FMLInitializationEvent event){
@@ -59,13 +74,25 @@ public class QuietTime{
         FMLCommonHandler.instance().bus().register(this);
         this.keyBindings = new KeyBindings(this);
      	this.devEnv = (Boolean)Launch.blackboard.get("fml.deobfuscatedEnvironment");
+     	
+     	
+    }
+    
+    
+    @EventHandler
+    public void preInit(FMLPreInitializationEvent event) {
+    	this.config = new ConfigManager();
+    	this.config.preInit(event);
+    	this.chatEventsDisabled = this.config.chatDisabledAtStartup;
+    	this.snitchHoverConversion = this.config.snitchHover;
+    	this.snitchRateLimiting = this.config.snitchRateLimiting;
+    	this.snitchSecondsBetweenMessages = this.config.snitchSecondsBetweenMessages;
     }
     
     
     /**
      * Converts all snitch positions from plain text to hover text so they won't be seen in screenshots
      */
-    private Pattern namedSnitchPattern = Pattern.compile("(?<preamble>^ \\* [a-zA-Z0-9_]+? (?:entered|logged (?:in to|out in)) snitch at )(?<snitchname>[a-zA-Z0-9_]+)? (?<snitchlocation>\\[[a-zA-Z0-9, \\-]+\\])");
     public ITextComponent snitchHoverConversion(ITextComponent message){ 
     	// Message content:
     	// * USER logged in to snitch at namedsnitch [world 623 4 271]
@@ -78,7 +105,7 @@ public class QuietTime{
             ITextComponent part = ichat.next();
             String s = part.getUnformattedComponentText(); // Note that we're going to need more than just the unformatted nonsense
             if (!s.isEmpty()){
-            	Matcher pm = namedSnitchPattern.matcher(s);
+            	Matcher pm = snitchPattern.matcher(s);
             	if (pm.find()){
 	        		if (pm.groupCount() >= 1){
 	        			String preamble = pm.group("preamble");
@@ -96,6 +123,7 @@ public class QuietTime{
 	        				magicName.setStyle(aqua);
 	        				magicName.setStyle(new Style().setHoverEvent(hover));
 	        				newMessage.appendSibling(magicName);
+	        	        	LOGGER.info("<Snitch location converted to hovertext> {} {}", snitchName, snitchLocation);
 	        			}
 	        		}
             	}
@@ -135,11 +163,58 @@ public class QuietTime{
 		}
     }
     
+    /**
+     * First determines if a message is a snitch alert, then finds the username in the message
+     * If the user has generated an alert less than snitchSecondsBetweenMessages seconds ago, the message is discarded (but still logged)
+     * If the message is to be blocked, the event will be cancelled
+     */
+    private ClientChatReceivedEvent checkSnitchRateLimited(ClientChatReceivedEvent event){
+    	String unformattedMessage = event.getMessage().getUnformattedText();
+    	Matcher matcher = snitchPattern.matcher(unformattedMessage);
+    	if (matcher.find()){
+    		if (matcher.groupCount() >= 1){
+    			String username = matcher.group("username");
+    			if (username != null){
+    				long currTime = System.currentTimeMillis();
+    				long pruneTime = currTime - this.snitchSecondsBetweenMessages*1000;
+    				// Prune old messages
+    				ArrayList<String> usersLeft = new ArrayList();
+    				Iterator i = this.snitchHistory.iterator();
+    				while (i.hasNext()) {
+    					SnitchUser u = (SnitchUser) i.next();
+    					if (u.time < pruneTime){
+    						i.remove();
+    					}
+    					else{
+    						usersLeft.add(u.username);
+    					}
+    				}
+    				// Check if the new username still exists in the history (meaning that there's 
+    				//   at least one message within the cutoff). If it does, cancel the event, but log the message
+    				if (usersLeft.contains(username)){
+    					event.setCanceled(true);
+    					LOGGER.info("[CHAT] {}", new Object[] {NEWLINE_STRING_JOINER.join(NEWLINE_SPLITTER.split(unformattedMessage))});
+    				}
+    				else{
+    					this.snitchHistory.add(new SnitchUser(username, currTime));
+    				}
+    			}
+    		}
+    	}
+    	return(event);
+    }
+    
     
     @SubscribeEvent(priority=EventPriority.HIGHEST)
     public void chatEvent(ClientChatReceivedEvent event){
     	// First, process any snitch co-ordinates
     	if (event.getType() == 1){
+    		// Handle rate limiting
+    		checkSnitchRateLimited(event);
+    		if (event.isCanceled()){
+    			return;
+    		}
+    		// Handle hover conversion
     		event.setMessage(snitchHoverConversion(event.getMessage()));
     	}
     	// Hide messages if chat is disabled

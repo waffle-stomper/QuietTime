@@ -21,7 +21,7 @@ public class KeyBindings{
 	
 	
 	public void init(){
-		this.toggleChatKey = new KeyBinding("Toggle Chat", Keyboard.KEY_Y, "Quiet Time");
+		this.toggleChatKey = new KeyBinding("Toggle Chat", Keyboard.KEY_MULTIPLY, "Quiet Time");
 		ClientRegistry.registerKeyBinding(this.toggleChatKey);
     	FMLCommonHandler.instance().bus().register(this);
 	}

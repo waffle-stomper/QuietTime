@@ -1,0 +1,10 @@
+{
+  "homepage": "https://github.com/waffle-stomper/QuietTime/releases",
+  "promos":{
+    "1.10-recommended": "0.3.7"
+  },
+  "1.10":{
+    "0.3.7": "Updated snitch regex to allow for hyphens in snitch and user names",
+    "0.3.6": "Added update notifications"
+  }
+}

@@ -31,7 +31,7 @@ public class ConfigManager {
 	    this.snitchRateLimiting = this.config.get("snitch_rate_limiting", "snitch_rate_limiting_enable", false, 
 	    		"Master enable switch for rate limiting").getBoolean(false);
 	    this.snitchSecondsBetweenMessages = this.config.get("snitch_rate_limiting", "seconds_between_messages", 10l, 
-	    		"Minimum number of seconds").getLong(10l);
+	    		"Minimum number of seconds between displayed messages").getLong(10l);
 	    
 	    
 	    this.config.save();

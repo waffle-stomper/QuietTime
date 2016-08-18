@@ -36,11 +36,11 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent.Phase;
 import net.minecraftforge.fml.common.gameevent.TickEvent.RenderTickEvent;
 
-@Mod(modid = QuietTime.MODID, version = QuietTime.VERSION, name = QuietTime.NAME, canBeDeactivated = true)
+@Mod(modid = QuietTime.MODID, version = QuietTime.VERSION, name = QuietTime.NAME, updateJSON = "https://raw.githubusercontent.com/waffle-stomper/QuietTime/master/update.json", canBeDeactivated = true)
 public class QuietTime{
 	
     public static final String MODID = "QuietTime";
-    public static final String VERSION = "0.3.0";
+    public static final String VERSION = "0.3.7";
     public static final String NAME = "Quiet Time";
     
     class SnitchUser{
@@ -65,7 +65,7 @@ public class QuietTime{
     private static final Splitter NEWLINE_SPLITTER = Splitter.on('\n');
     private static final Joiner NEWLINE_STRING_JOINER = Joiner.on("\\n");
     private static final Logger LOGGER = LogManager.getLogger(net.minecraft.client.Minecraft.class);
-    private static final Pattern snitchPattern = Pattern.compile("(?<preamble>^ \\* (?<username>[a-zA-Z0-9_]+?) (?:entered|logged (?:in to|out in)) snitch at )(?<snitchname>[a-zA-Z0-9_]+)? (?<snitchlocation>\\[[a-zA-Z0-9, \\-]+\\])");
+    private static final Pattern snitchPattern = Pattern.compile("(?<preamble>^ \\* (?<username>[a-zA-Z0-9_\\-]+?) (?:entered|logged (?:in to|out in)) snitch at )(?<snitchname>[a-zA-Z0-9_\\-]+)? (?<snitchlocation>\\[[a-zA-Z0-9, \\-]+\\])");
     private ArrayList<SnitchUser> snitchHistory = new ArrayList();
     
     @EventHandler
